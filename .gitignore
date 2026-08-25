@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Captured tensors are large and may contain production-derived data.
+*.pt
+*.pth
+*.safetensors
+
+# Runtime diagnostics and compiler artifacts.
+*.log
+profile/
+profiles/
+timeout_diagnostics/
+triton_cache/
