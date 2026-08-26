@@ -9,6 +9,7 @@ multi-hour profiling runs so a stack change can be evaluated quickly.
 | Directory | Target operator | Regression |
 | --- | --- | --- |
 | `csgmv_lora_shrink_perf` | `sglang.kernels.ops.gemm.chunked_sgmv_shrink._chunked_lora_shrink_kernel` | LoRA-A shrink became tens to hundreds of times slower on the 0813 stack |
+| `ifa_npugraph_update_perf` | `torch.npu.NPUGraph.update` for 48 `npu_fused_infer_attention_score.out` records | IFA graph-record update became slower with CANN 9.1 while eager IFA stayed flat |
 | `recompute_multi_rank_hang` | `sgl_kernel_npu.fla.wy_fast.recompute_w_u_fwd_npu` | A Qwen3-Next TP4/DP1 process stopped inside the operator after prior model execution |
 
 ## csgmv LoRA-A shrink performance regression
@@ -55,6 +56,39 @@ CSGMV_SHRINK_PREFILL_MAX_MS=30 \
 NPU_DEVICE_INDEX=0 \
 python3 csgmv_lora_shrink_perf/test_chunked_lora_shrink_perf_regression.py -v
 ```
+
+## IFA NPU Graph update performance regression
+
+This model-free reproducer captures 48 independent
+`npu_fused_infer_attention_score.out` records with the Qwen3-30B-A3B EAGLE3
+target-verify shape.  It updates `actual_seq_lengths_kv` on a CPU worker while
+the main thread submits `NPUGraph.replay`, and measures eager IFA as a control.
+
+Representative measurements on the same Ascend NPU:
+
+| Stack | 48-record update p50 | Eager submit p50 | Eager sync-total p50 |
+| --- | ---: | ---: | ---: |
+| 0723 / CANN 9.0 | 4,158.525 us | 44.880 us | 112.777 us |
+| 0813 / CANN 9.1 | 4,630.838 us | 44.726 us | 113.612 us |
+
+Run the report-only production-shaped case:
+
+```bash
+NPU_DEVICE_INDEX=0 \
+python3 ifa_npugraph_update_perf/ifa_npugraph_update_repro.py
+```
+
+An optional, machine-specific threshold turns it into a regression gate:
+
+```bash
+NPU_DEVICE_INDEX=14 \
+python3 ifa_npugraph_update_perf/ifa_npugraph_update_repro.py \
+  --warmup 20 --iters 150 --max-update-p50-us 4400
+```
+
+See [`ifa_npugraph_update_perf/README.md`](ifa_npugraph_update_perf/README.md)
+for the exact shape, profiler command, interpretation, and reproduction
+boundary.
 
 ## `recompute_w_u_fwd_npu` multi-rank hang replay
 
