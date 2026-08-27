@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce the CANN 9.1 IFA NPU Graph update latency regression.
+"""Measure IFA NPU Graph update latency and scheduling stability.
 
 The Qwen3-30B-A3B EAGLE3 target-verify graph contains 48 independent
 FusedInferAttentionScore records.  This reproducer captures the same number
@@ -12,8 +12,10 @@ case with:
 
     NPU_DEVICE_INDEX=0 python3 ifa_npugraph_update_repro.py
 
-Use ``--max-update-p50-us`` to turn the measurement into a regression gate.
-The default is report-only because absolute host latency varies by machine.
+Use multiple measurement blocks and repeated processes when comparing stacks.
+The default is report-only because absolute latency and slow-tail frequency
+depend on host scheduling.  ``--max-update-p50-us`` is available only after a
+machine-specific, CPU-affinity-controlled baseline has been established.
 """
 
 from __future__ import annotations
@@ -63,6 +65,15 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--warmup", type=int, default=30)
     parser.add_argument("--iters", type=int, default=200)
+    parser.add_argument(
+        "--measurement-blocks",
+        type=int,
+        default=1,
+        help=(
+            "number of independently reported timing blocks after one graph "
+            "capture (default: 1)"
+        ),
+    )
     parser.add_argument("--seq-len", type=int, default=3500)
     parser.add_argument(
         "--unique-tensors",
@@ -98,6 +109,8 @@ def _parse_args() -> argparse.Namespace:
         parser.error("--warmup must be non-negative")
     if args.iters < 1:
         parser.error("--iters must be at least 1")
+    if args.measurement_blocks < 1:
+        parser.error("--measurement-blocks must be at least 1")
     if args.eager_iters < 1:
         parser.error("--eager-iters must be at least 1")
     if args.seq_len < 1:
@@ -268,6 +281,7 @@ def main() -> int:
     update_us: list[float] = []
     replay_us: list[float] = []
     overlap_total_us: list[float] = []
+    block_results: list[dict[str, object]] = []
 
     def timed_update() -> float:
         started = time.perf_counter_ns()
@@ -279,18 +293,44 @@ def main() -> int:
         profiler.start()
 
     try:
-        for iteration in range(args.warmup + args.iters):
-            started = time.perf_counter_ns()
+        for _ in range(args.warmup):
             future = executor.submit(timed_update)
-            replay_started = time.perf_counter_ns()
             graph.replay()
-            replay_finished = time.perf_counter_ns()
-            current_update_us = future.result()
-            finished = time.perf_counter_ns()
-            if iteration >= args.warmup:
-                update_us.append(current_update_us)
-                replay_us.append((replay_finished - replay_started) / 1_000)
-                overlap_total_us.append((finished - started) / 1_000)
+            future.result()
+
+        for block_index in range(args.measurement_blocks):
+            block_update_us: list[float] = []
+            block_replay_us: list[float] = []
+            block_overlap_total_us: list[float] = []
+            for _ in range(args.iters):
+                started = time.perf_counter_ns()
+                future = executor.submit(timed_update)
+                replay_started = time.perf_counter_ns()
+                graph.replay()
+                replay_finished = time.perf_counter_ns()
+                current_update_us = future.result()
+                finished = time.perf_counter_ns()
+                block_update_us.append(current_update_us)
+                block_replay_us.append((replay_finished - replay_started) / 1_000)
+                block_overlap_total_us.append((finished - started) / 1_000)
+
+            update_us.extend(block_update_us)
+            replay_us.extend(block_replay_us)
+            overlap_total_us.extend(block_overlap_total_us)
+            block_update_stats = _stats(block_update_us)
+            block_result = {
+                "block": block_index + 1,
+                "update": block_update_stats,
+                "replay_submit": _stats(block_replay_us),
+                "overlap_total": _stats(block_overlap_total_us),
+            }
+            block_results.append(block_result)
+            print(
+                f"measurement block {block_index + 1}/{args.measurement_blocks}: "
+                f"update p50={block_update_stats['p50_us']:.3f} us",
+                file=sys.stderr,
+                flush=True,
+            )
     finally:
         if profiler is not None:
             profiler.stop()
@@ -299,9 +339,12 @@ def main() -> int:
 
     result.update(
         {
+            "measurement_blocks": args.measurement_blocks,
+            "iterations_per_block": args.iters,
             "update": _stats(update_us),
             "replay_submit": _stats(replay_us),
             "overlap_total": _stats(overlap_total_us),
+            "blocks": block_results,
         }
     )
     print(json.dumps(result, indent=2, sort_keys=True))
