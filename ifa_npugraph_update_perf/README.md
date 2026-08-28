@@ -12,8 +12,8 @@ SGLang or load model weights.
 ## What it measures
 
 Each target-verification decode step in the original model graph updates 48
-`npu_fused_infer_attention_score.out` records.  The reproducer defaults to the
-same full `bs=162` graph bucket and core shape:
+functional `torch.ops.npu.npu_fused_infer_attention_score` dispatch records.
+The reproducer defaults to the same full `bs=162` graph bucket and core shape:
 
 ```text
 records=48
@@ -32,10 +32,10 @@ sparse mode=3 with the production 2048x2048 boolean MTP mask
 dtype=bfloat16
 ```
 
-Every record receives distinct query, key, value, block-table, and output
-addresses.  The workspace can be shared because the calls are issued
-serially.  As in the production graph runner, `NPUGraph.update` runs on a CPU
-worker while the main thread submits `NPUGraph.replay`.  The worker explicitly
+Every record receives distinct query, key, value, block-table, and retained
+functional-output addresses.  As in the production graph runner,
+`NPUGraph.update` runs on a CPU worker while the main thread submits
+`NPUGraph.replay`.  The worker explicitly
 selects the requested NPU because torch-npu device selection is thread-local;
 without that initialization a run targeting a nonzero device can silently
 open device 0 and hang during final synchronization.
@@ -46,10 +46,11 @@ torch-npu expands that single CPU input across all 48 captured IFA dispatch
 records.  Supplying 48 dictionaries directly would update the same values but
 would bypass the singleton expansion host path being measured.
 
-The eager IFA path is measured as a control.  Before `--batch-size` was added,
-the diagnostic used five independent single-query entries rather than the
-production 162-request target-verify shape.  Those legacy measurements showed
-flat eager latency and a slower 48-record update:
+The eager IFA path is measured as a control.  Before the production path was
+fully aligned, the diagnostic used the explicit-workspace `.out` API and five
+independent single-query entries rather than the functional non-MLA API and
+the 162-request target-verify shape.  Those legacy measurements showed flat
+eager latency and a slower 48-record update:
 
 | Stack | 48-record update p50 | Eager submit p50 | Eager sync-total p50 |
 | --- | ---: | ---: | ---: |
@@ -57,7 +58,7 @@ flat eager latency and a slower 48-record update:
 | 0813 / CANN 9.1 | 4,630.838 us | 44.726 us | 113.612 us |
 | Difference | **+472.313 us (+11.36%)** | -0.154 us | +0.835 us |
 
-That legacy-shape snapshot motivated this reproducer, but repeated validation showed that
+That legacy API/shape snapshot motivated this reproducer, but repeated validation showed that
 the result is sensitive to CPU placement.  Unpinned runs produced a bimodal
 slow tail primarily in the 0813 container; applying the same CPU affinity to
 both containers removed the slow tail and the 0813 stack was not slower.  The

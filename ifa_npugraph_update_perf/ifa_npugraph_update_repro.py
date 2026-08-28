@@ -211,14 +211,9 @@ def main() -> int:
         "sparse_mode": 3,
     }
 
-    # The calls are serial, so sharing the workspace is safe.  Unique tensor
-    # addresses still force 48 independent graph records, as in the model.
-    workspace = torch_npu._npu_fused_infer_attention_score_get_max_workspace(
-        query, key, value, **common, block_table=block_table
-    )
-    output = torch.empty_like(query)
-    lse = torch.empty(1, device=device, dtype=dtype)
-    workspaces = [workspace] * args.records
+    # Qwen3-30B-A3B is on the non-MLA forward_mtp branch.  That production
+    # path uses the functional torch.ops API; the explicit-workspace `.out`
+    # API belongs to the MLA branch and does not replay equivalently here.
     if args.unique_tensors:
         queries = [query] + [torch.empty_like(query) for _ in range(args.records - 1)]
         keys = [key] + [torch.empty_like(key) for _ in range(args.records - 1)]
@@ -226,49 +221,44 @@ def main() -> int:
         block_tables = [block_table] + [
             block_table.clone() for _ in range(args.records - 1)
         ]
-        outputs = [[output, lse]] + [
-            [torch.empty_like(output), torch.empty_like(lse)]
-            for _ in range(args.records - 1)
-        ]
     else:
         queries = [query] * args.records
         keys = [key] * args.records
         values = [value] * args.records
         block_tables = [block_table] * args.records
-        outputs = [[output, lse]] * args.records
 
-    def issue_ops() -> None:
+    def issue_ops() -> list[object]:
+        outputs = []
         for index in range(args.records):
-            torch_npu.npu_fused_infer_attention_score.out(
-                queries[index],
-                keys[index],
-                values[index],
-                **common,
-                block_table=block_tables[index],
-                workspace=workspaces[index],
-                out=outputs[index],
+            outputs.append(
+                torch.ops.npu.npu_fused_infer_attention_score(
+                    queries[index],
+                    keys[index],
+                    values[index],
+                    **common,
+                    block_table=block_tables[index],
+                )
             )
+        return outputs
 
-    def issue_one() -> None:
-        torch_npu.npu_fused_infer_attention_score.out(
+    def issue_one() -> object:
+        return torch.ops.npu.npu_fused_infer_attention_score(
             queries[0],
             keys[0],
             values[0],
             **common,
             block_table=block_tables[0],
-            workspace=workspaces[0],
-            out=outputs[0],
         )
 
     for _ in range(3):
-        issue_ops()
+        warmup_outputs = issue_ops()
     torch.npu.synchronize()
 
     eager_submit_us: list[float] = []
     eager_sync_total_us: list[float] = []
     for _ in range(args.eager_iters):
         started = time.perf_counter_ns()
-        issue_one()
+        eager_output = issue_one()
         submitted = time.perf_counter_ns()
         torch.npu.synchronize()
         synchronized = time.perf_counter_ns()
@@ -290,7 +280,7 @@ def main() -> int:
         "blocks_per_request": blocks_per_request,
         "kv_blocks": num_blocks,
         "unique_tensors": args.unique_tensors,
-        "workspace_bytes": workspace.numel() * workspace.element_size(),
+        "operator_api": "torch.ops.npu.npu_fused_infer_attention_score",
         "eager_submit": _stats(eager_submit_us),
         "eager_sync_total": _stats(eager_sync_total_us),
     }
@@ -305,7 +295,9 @@ def main() -> int:
         stream=capture_stream,
         auto_dispatch_capture=True,
     ):
-        issue_ops()
+        # Retain every functional output so capture does not recycle output
+        # addresses between the 48 layer-like records.
+        captured_outputs = issue_ops()
     torch.npu.synchronize()
 
     # Match the target graph runner exactly: submit one CPU update input and
