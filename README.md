@@ -9,7 +9,7 @@ multi-hour profiling runs so a stack change can be evaluated quickly.
 | Directory | Target operator | Regression |
 | --- | --- | --- |
 | `csgmv_lora_shrink_perf` | `sglang.kernels.ops.gemm.chunked_sgmv_shrink._chunked_lora_shrink_kernel` | LoRA-A shrink became tens to hundreds of times slower on the 0813 stack |
-| `ifa_npugraph_update_perf` | `torch.npu.NPUGraph.update` for 48 `npu_fused_infer_attention_score.out` records | IFA graph-record update became slower with CANN 9.1 while eager IFA stayed flat |
+| `ifa_npugraph_update_perf` | `torch.npu.NPUGraph.update` for 48 `npu_fused_infer_attention_score.out` records | Diagnose the unpinned 0813 slow tail and distinguish it from CPU-placement noise |
 | `recompute_multi_rank_hang` | `sgl_kernel_npu.fla.wy_fast.recompute_w_u_fwd_npu` | A Qwen3-Next TP4/DP1 process stopped inside the operator after prior model execution |
 
 ## csgmv LoRA-A shrink performance regression
@@ -57,19 +57,27 @@ NPU_DEVICE_INDEX=0 \
 python3 csgmv_lora_shrink_perf/test_chunked_lora_shrink_perf_regression.py -v
 ```
 
-## IFA NPU Graph update performance regression
+## IFA NPU Graph update performance diagnostic
 
 This model-free reproducer captures 48 independent
 `npu_fused_infer_attention_score.out` records with the Qwen3-30B-A3B EAGLE3
 target-verify shape.  It updates `actual_seq_lengths_kv` on a CPU worker while
 the main thread submits `NPUGraph.replay`, and measures eager IFA as a control.
 
-Representative measurements on the same Ascend NPU:
+The first single-process comparison on the same Ascend NPU was:
 
 | Stack | 48-record update p50 | Eager submit p50 | Eager sync-total p50 |
 | --- | ---: | ---: | ---: |
 | 0723 / CANN 9.0 | 4,158.525 us | 44.880 us | 112.777 us |
 | 0813 / CANN 9.1 | 4,630.838 us | 44.726 us | 113.612 us |
+
+Repeated three-process, ten-block validation found that this difference was
+not stable under controlled CPU placement.  Unpinned, the 0813 stack produced
+11/30 blocks above 6 ms versus 0/30 on 0723.  With both containers pinned to
+CPU 242--259, both had 0/30 slow blocks and the 0813 block mean was 1.68%
+lower.  The microbenchmark therefore diagnoses the graph-update path and its
+scheduling sensitivity; it does not independently prove a CANN 9.1 operator
+regression.
 
 Run the report-only production-shaped case:
 
@@ -78,12 +86,20 @@ NPU_DEVICE_INDEX=0 \
 python3 ifa_npugraph_update_perf/ifa_npugraph_update_repro.py
 ```
 
-An optional, machine-specific threshold turns it into a regression gate:
+For a reproducible comparison, run both containers repeatedly with identical
+CPU affinity:
 
 ```bash
-NPU_DEVICE_INDEX=14 \
-python3 ifa_npugraph_update_perf/ifa_npugraph_update_repro.py \
-  --warmup 20 --iters 150 --max-update-p50-us 4400
+bash ifa_npugraph_update_perf/run_container_matrix.sh \
+  --old-container sglwmc-723 \
+  --new-container sglwmc-813-ifa-repro \
+  --device 14 \
+  --rounds 3 \
+  --measurement-blocks 10 \
+  --warmup 20 \
+  --iters 150 \
+  --cpu-set 242-259 \
+  --output-dir /data/wzy/ifa_npugraph_matrix
 ```
 
 See [`ifa_npugraph_update_perf/README.md`](ifa_npugraph_update_perf/README.md)
