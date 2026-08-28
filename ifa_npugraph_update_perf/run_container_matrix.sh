@@ -15,6 +15,8 @@ warmup=20
 iters=150
 eager_iters=100
 records=48
+batch_size=162
+tokens_per_request=5
 seq_len=3500
 cpu_set=""
 
@@ -29,7 +31,8 @@ Usage:
     --output-dir DIR \
     [--device N] [--rounds N] [--measurement-blocks N] \
     [--warmup N] [--iters N] [--eager-iters N] \
-    [--records N] [--seq-len N] [--cpu-set CPU-LIST]
+    [--records N] [--batch-size N] [--tokens-per-request N] \
+    [--seq-len N] [--cpu-set CPU-LIST]
 
 The host must have docker, npu-smi, and python3. Both containers must already
 be running and expose the requested physical NPU. The runner refuses to start
@@ -49,6 +52,8 @@ while [[ $# -gt 0 ]]; do
     --iters) iters=${2:?missing value}; shift 2 ;;
     --eager-iters) eager_iters=${2:?missing value}; shift 2 ;;
     --records) records=${2:?missing value}; shift 2 ;;
+    --batch-size) batch_size=${2:?missing value}; shift 2 ;;
+    --tokens-per-request) tokens_per_request=${2:?missing value}; shift 2 ;;
     --seq-len) seq_len=${2:?missing value}; shift 2 ;;
     --cpu-set) cpu_set=${2:?missing value}; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -69,15 +74,15 @@ for required_command in docker find npu-smi python3 sha256sum; do
   }
 done
 
-for value_name in device rounds measurement_blocks warmup iters eager_iters records seq_len; do
+for value_name in device rounds measurement_blocks warmup iters eager_iters records batch_size tokens_per_request seq_len; do
   value=${!value_name}
   if [[ ! "$value" =~ ^[0-9]+$ ]]; then
     echo "$value_name must be a non-negative integer: $value" >&2
     exit 2
   fi
 done
-if (( rounds < 1 || measurement_blocks < 1 || iters < 1 || eager_iters < 1 || records < 1 || seq_len < 1 )); then
-  echo "rounds, measurement-blocks, iters, eager-iters, records, and seq-len must be positive" >&2
+if (( rounds < 1 || measurement_blocks < 1 || iters < 1 || eager_iters < 1 || records < 1 || batch_size < 1 || tokens_per_request < 1 || seq_len < 1 )); then
+  echo "rounds, measurement-blocks, iters, eager-iters, records, batch-size, tokens-per-request, and seq-len must be positive" >&2
   exit 2
 fi
 
@@ -135,6 +140,8 @@ sha256sum "$repro_script" >"$output_dir/reproducer.sha256"
   echo "iters=$iters"
   echo "eager_iters=$eager_iters"
   echo "records=$records"
+  echo "batch_size=$batch_size"
+  echo "tokens_per_request=$tokens_per_request"
   echo "seq_len=$seq_len"
   echo "cpu_set=${cpu_set:-unbound}"
   for container in "$old_container" "$new_container"; do
@@ -190,6 +197,8 @@ run_one() {
     "${python_command[@]}" \
       --device "$device" \
       --records "$records" \
+      --batch-size "$batch_size" \
+      --tokens-per-request "$tokens_per_request" \
       --unique-tensors \
       --seq-len "$seq_len" \
       --warmup "$warmup" \

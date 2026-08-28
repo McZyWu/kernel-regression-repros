@@ -2,10 +2,12 @@
 """Measure IFA NPU Graph update latency and scheduling stability.
 
 The Qwen3-30B-A3B EAGLE3 target-verify graph contains 48 independent
-FusedInferAttentionScore records.  This reproducer captures the same number
-of IFA records, changes ``actual_seq_lengths_kv`` through ``NPUGraph.update``,
-and overlaps the update with ``NPUGraph.replay`` in the same shape as the
-production graph runner.
+FusedInferAttentionScore records.  At the production graph bucket of 162
+requests, each target-verify forward contains five query tokens per request
+and updates a 162-element ``actual_seq_lengths_kv`` list.  This reproducer
+captures the same number and shapes of IFA records, changes that list through
+``NPUGraph.update``, and overlaps the update with ``NPUGraph.replay`` as the
+production graph runner does.
 
 No SGLang checkout or model weights are required.  Run the production-shaped
 case with:
@@ -63,6 +65,18 @@ def _parse_args() -> argparse.Namespace:
         default=48,
         help="number of captured IFA records (production target verify: 48)",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=162,
+        help="requests in the target-verify graph bucket (production: 162)",
+    )
+    parser.add_argument(
+        "--tokens-per-request",
+        type=int,
+        default=5,
+        help="target-verify query tokens per request (4 drafts + 1 bonus)",
+    )
     parser.add_argument("--warmup", type=int, default=30)
     parser.add_argument("--iters", type=int, default=200)
     parser.add_argument(
@@ -105,6 +119,10 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.records < 1:
         parser.error("--records must be at least 1")
+    if args.batch_size < 1:
+        parser.error("--batch-size must be at least 1")
+    if args.tokens_per_request < 1:
+        parser.error("--tokens-per-request must be at least 1")
     if args.warmup < 0:
         parser.error("--warmup must be non-negative")
     if args.iters < 1:
@@ -152,12 +170,15 @@ def main() -> int:
     dtype = torch.bfloat16
 
     # Qwen3-30B-A3B target-verify attention shape.
-    num_tokens = 5
+    num_tokens = args.batch_size * args.tokens_per_request
     num_heads = 16
     num_kv_heads = 2
     head_dim = 128
     page_size = 128
-    num_blocks = math.ceil((args.seq_len + num_tokens) / page_size)
+    blocks_per_request = math.ceil(
+        (args.seq_len + args.tokens_per_request) / page_size
+    )
+    num_blocks = args.batch_size * blocks_per_request
 
     query = torch.randn(
         (num_tokens, 1, num_heads * head_dim), device=device, dtype=dtype
@@ -168,16 +189,16 @@ def main() -> int:
         dtype=dtype,
     )
     value = torch.randn_like(key)
-    block_table = torch.arange(num_blocks, device=device, dtype=torch.int32)[
-        None, :
-    ].repeat(num_tokens, 1)
+    block_table = torch.arange(num_blocks, device=device, dtype=torch.int32).view(
+        args.batch_size, blocks_per_request
+    )
     common = {
         "block_size": page_size,
         "num_heads": num_heads,
         "num_key_value_heads": num_kv_heads,
         "input_layout": "BSH",
         "scale": head_dim**-0.5,
-        "actual_seq_lengths_kv": [args.seq_len] * num_tokens,
+        "actual_seq_lengths_kv": [args.seq_len] * args.batch_size,
         "sparse_mode": 0,
     }
 
@@ -253,7 +274,12 @@ def main() -> int:
         },
         "device": args.device,
         "records": args.records,
+        "batch_size": args.batch_size,
+        "tokens_per_request": args.tokens_per_request,
+        "query_tokens": num_tokens,
         "seq_len": args.seq_len,
+        "blocks_per_request": blocks_per_request,
+        "kv_blocks": num_blocks,
         "unique_tensors": args.unique_tensors,
         "workspace_bytes": workspace.numel() * workspace.element_size(),
         "eager_submit": _stats(eager_submit_us),
@@ -274,7 +300,7 @@ def main() -> int:
     torch.npu.synchronize()
 
     updates = [
-        {"actual_seq_lengths_kv": [args.seq_len + 1] * num_tokens}
+        {"actual_seq_lengths_kv": [args.seq_len + 1] * args.batch_size}
         for _ in range(args.records)
     ]
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)

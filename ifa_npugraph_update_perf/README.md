@@ -12,16 +12,19 @@ SGLang or load model weights.
 ## What it measures
 
 Each target-verification decode step in the original model graph updates 48
-`npu_fused_infer_attention_score.out` records.  The reproducer uses the same
-core shape:
+`npu_fused_infer_attention_score.out` records.  The reproducer defaults to the
+same full `bs=162` graph bucket and core shape:
 
 ```text
 records=48
-query tokens=5
+batch size=162
+query tokens per request=5 (4 drafts + 1 bonus)
+total query tokens=810
 query heads=16
 KV heads=2
 head dimension=128
 KV sequence length=3500 -> 3501
+actual_seq_lengths_kv elements=162
 KV page size=128
 dtype=bfloat16
 ```
@@ -31,8 +34,10 @@ addresses.  The workspace can be shared because the calls are issued
 serially.  As in the production graph runner, `NPUGraph.update` runs on a CPU
 worker while the main thread submits `NPUGraph.replay`.
 
-The eager IFA path is measured as a control.  The first single-process
-comparison showed flat eager latency and a slower 48-record update:
+The eager IFA path is measured as a control.  Before `--batch-size` was added,
+the diagnostic used five independent single-query entries rather than the
+production 162-request target-verify shape.  Those legacy measurements showed
+flat eager latency and a slower 48-record update:
 
 | Stack | 48-record update p50 | Eager submit p50 | Eager sync-total p50 |
 | --- | ---: | ---: | ---: |
@@ -40,7 +45,7 @@ comparison showed flat eager latency and a slower 48-record update:
 | 0813 / CANN 9.1 | 4,630.838 us | 44.726 us | 113.612 us |
 | Difference | **+472.313 us (+11.36%)** | -0.154 us | +0.835 us |
 
-That snapshot motivated this reproducer, but repeated validation showed that
+That legacy-shape snapshot motivated this reproducer, but repeated validation showed that
 the result is sensitive to CPU placement.  Unpinned runs produced a bimodal
 slow tail primarily in the 0813 container; applying the same CPU affinity to
 both containers removed the slow tail and the 0813 stack was not slower.  The
@@ -50,12 +55,16 @@ CANN attribution.
 
 ## Run
 
-The default command runs the production-shaped 48-record case and prints JSON:
+The default command runs the production-shaped 48-record, `bs=162` case and
+prints JSON:
 
 ```bash
 NPU_DEVICE_INDEX=0 \
 python3 ifa_npugraph_update_perf/ifa_npugraph_update_repro.py
 ```
+
+For a lightweight control that does not reproduce the full graph bucket, pass
+`--batch-size 1`.  Keep this result separate from the `bs=162` comparison.
 
 The important fields are:
 
@@ -84,7 +93,8 @@ NPU_DEVICE_INDEX=14 \
 python3 ifa_npugraph_update_perf/ifa_npugraph_update_repro.py \
   --warmup 20 \
   --iters 150 \
-  --measurement-blocks 10
+  --measurement-blocks 10 \
+  --batch-size 162
 ```
 
 Run only the eager control:
@@ -146,6 +156,7 @@ bash ifa_npugraph_update_perf/run_container_matrix.sh \
   --warmup 20 \
   --iters 150 \
   --eager-iters 100 \
+  --batch-size 162 \
   --output-dir "$result_dir"
 ```
 
@@ -170,6 +181,7 @@ bash ifa_npugraph_update_perf/run_container_matrix.sh \
   --warmup 20 \
   --iters 150 \
   --eager-iters 100 \
+  --batch-size 162 \
   --cpu-set 242-259 \
   --output-dir "$result_dir"
 ```
@@ -180,7 +192,9 @@ Regenerate a summary without rerunning the NPU workload:
 python3 ifa_npugraph_update_perf/summarize_results.py "$result_dir"
 ```
 
-The repeated machine-204 results were:
+The repeated machine-204 results below used the legacy five-entry diagnostic
+shape.  They remain evidence about CPU scheduling sensitivity, but they are
+not a substitute for the `bs=162` matrix:
 
 | CPU placement | Stack | Block median | Block mean | CV | Blocks above 6 ms |
 | --- | --- | ---: | ---: | ---: | ---: |
