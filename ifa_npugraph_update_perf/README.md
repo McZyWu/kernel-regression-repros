@@ -33,9 +33,8 @@ dtype=bfloat16
 ```
 
 Every record receives distinct query, key, value, block-table, and retained
-functional-output addresses.  As in the production graph runner,
-`NPUGraph.update` runs on a CPU worker while the main thread submits
-`NPUGraph.replay`.  The worker explicitly
+functional-output addresses.  `NPUGraph.update` runs on a CPU worker as it
+does in the production graph runner.  The worker explicitly
 selects the requested NPU because torch-npu device selection is thread-local;
 without that initialization a run targeting a nonzero device can silently
 open device 0 and hang during final synchronization.
@@ -45,6 +44,15 @@ The update call also follows the target runner's production form exactly:
 torch-npu expands that single CPU input across all 48 captured IFA dispatch
 records.  Supplying 48 dictionaries directly would update the same values but
 would bypass the singleton expansion host path being measured.
+
+The default `--update-only` mode intentionally isolates that host update.
+Standalone replay of even one extracted functional TND IFA record was observed
+to submit immediately but leave a pending device task at final synchronization
+on both stacks.  The complete model graph replays successfully, so standalone
+IFA replay is not a faithful substitute for the surrounding graph dependencies.
+Use whole-model profiling to compare update/replay interaction.  The optional
+`--no-update-only` mode is retained only for diagnosing shapes known to replay
+safely; do not use it for the default TND shape as a performance result.
 
 The eager IFA path is measured as a control.  Before the production path was
 fully aligned, the diagnostic used the explicit-workspace `.out` API and five
@@ -82,9 +90,11 @@ For a lightweight control that does not reproduce the full graph bucket, pass
 The important fields are:
 
 - `update`: time spent in `NPUGraph.update` on the CPU worker;
-- `replay_submit`: main-thread `NPUGraph.replay` submission time;
-- `overlap_total`: wall time from starting the update worker until both update
-  and replay submission have returned;
+- `replay_submit`: zero in the default update-only mode; in experimental
+  overlap mode, main-thread `NPUGraph.replay` submission time;
+- `overlap_total`: in update-only mode, wall time from scheduling the worker
+  until update completion; in experimental overlap mode, wall time until both
+  update and replay submission have returned;
 - `eager_submit` and `eager_sync_total`: same-stack controls for a single IFA
   call.
 
@@ -109,6 +119,10 @@ python3 ifa_npugraph_update_perf/ifa_npugraph_update_repro.py \
   --measurement-blocks 10 \
   --batch-size 162
 ```
+
+The command above uses the default safe `--update-only` mode.  Do not pass
+`--no-update-only` for the extracted production TND shape; compare replay and
+device execution with the complete-model profile instead.
 
 Run only the eager control:
 

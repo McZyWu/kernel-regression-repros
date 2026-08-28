@@ -5,9 +5,10 @@ The Qwen3-30B-A3B EAGLE3 target-verify graph contains 48 independent
 FusedInferAttentionScore records.  At the production graph bucket of 162
 requests, each target-verify forward contains four query tokens per request
 and updates a 162-element ``actual_seq_lengths_kv`` list.  This reproducer
-captures the same number and shapes of IFA records, changes that list through
-``NPUGraph.update``, and overlaps the update with ``NPUGraph.replay`` as the
-production graph runner does.
+captures the same number and shapes of IFA records and changes that list
+through ``NPUGraph.update``.  The default isolates the host update path:
+standalone replay of this extracted TND subgraph can leave a pending device
+task because it omits the surrounding whole-model graph dependencies.
 
 No SGLang checkout or model weights are required.  Run the production-shaped
 case with:
@@ -94,6 +95,16 @@ def _parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="give each captured record unique tensor addresses (default: true)",
+    )
+    parser.add_argument(
+        "--update-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "measure only the production-shaped host graph.update path "
+            "(default: true); --no-update-only also submits standalone graph "
+            "replay and is experimental for the extracted TND subgraph"
+        ),
     )
     parser.add_argument("--eager-iters", type=int, default=100)
     parser.add_argument(
@@ -281,6 +292,7 @@ def main() -> int:
         "kv_blocks": num_blocks,
         "unique_tensors": args.unique_tensors,
         "operator_api": "torch.ops.npu.npu_fused_infer_attention_score",
+        "mode": "update_only" if args.update_only else "update_replay_overlap",
         "eager_submit": _stats(eager_submit_us),
         "eager_sync_total": _stats(eager_sync_total_us),
     }
@@ -332,7 +344,8 @@ def main() -> int:
     try:
         for _ in range(args.warmup):
             future = executor.submit(timed_update)
-            graph.replay()
+            if not args.update_only:
+                graph.replay()
             future.result()
 
         for block_index in range(args.measurement_blocks):
@@ -343,12 +356,17 @@ def main() -> int:
                 started = time.perf_counter_ns()
                 future = executor.submit(timed_update)
                 replay_started = time.perf_counter_ns()
-                graph.replay()
+                if not args.update_only:
+                    graph.replay()
                 replay_finished = time.perf_counter_ns()
                 current_update_us = future.result()
                 finished = time.perf_counter_ns()
                 block_update_us.append(current_update_us)
-                block_replay_us.append((replay_finished - replay_started) / 1_000)
+                block_replay_us.append(
+                    0.0
+                    if args.update_only
+                    else (replay_finished - replay_started) / 1_000
+                )
                 block_overlap_total_us.append((finished - started) / 1_000)
 
             update_us.extend(block_update_us)

@@ -61,9 +61,11 @@ python3 csgmv_lora_shrink_perf/test_chunked_lora_shrink_perf_regression.py -v
 
 This model-free reproducer captures 48 independent
 functional `torch.ops.npu.npu_fused_infer_attention_score` records with the
-Qwen3-30B-A3B EAGLE3 target-verify shape.  It updates
-`actual_seq_lengths_kv` on a CPU worker while the main thread submits
-`NPUGraph.replay`, and measures eager IFA as a control.
+Qwen3-30B-A3B EAGLE3 target-verify shape.  Its default safe mode isolates the
+host `NPUGraph.update` of `actual_seq_lengths_kv` on a CPU worker, and it
+measures eager IFA as a control.  Replay interaction must be compared in the
+whole-model profile because standalone replay of the extracted TND subgraph
+can leave a pending device task.
 
 The first single-process comparison on the same Ascend NPU used the earlier
 explicit-workspace `.out` API and lightweight shape:
