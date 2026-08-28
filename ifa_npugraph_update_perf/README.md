@@ -35,7 +35,10 @@ dtype=bfloat16
 Every record receives distinct query, key, value, block-table, and output
 addresses.  The workspace can be shared because the calls are issued
 serially.  As in the production graph runner, `NPUGraph.update` runs on a CPU
-worker while the main thread submits `NPUGraph.replay`.
+worker while the main thread submits `NPUGraph.replay`.  The worker explicitly
+selects the requested NPU because torch-npu device selection is thread-local;
+without that initialization a run targeting a nonzero device can silently
+open device 0 and hang during final synchronization.
 
 The eager IFA path is measured as a control.  Before `--batch-size` was added,
 the diagnostic used five independent single-query entries rather than the

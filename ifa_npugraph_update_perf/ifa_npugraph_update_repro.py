@@ -312,7 +312,14 @@ def main() -> int:
         {"actual_seq_lengths_kv": [args.seq_len + 1] * args.batch_size}
         for _ in range(args.records)
     ]
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    # NPU device selection is thread-local.  Without an initializer, a worker
+    # created while the main thread is on (for example) npu:14 silently opens
+    # npu:0 and graph.update/final synchronization can cross devices or hang.
+    executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=1,
+        initializer=torch.npu.set_device,
+        initargs=(args.device,),
+    )
     update_us: list[float] = []
     replay_us: list[float] = []
     overlap_total_us: list[float] = []
