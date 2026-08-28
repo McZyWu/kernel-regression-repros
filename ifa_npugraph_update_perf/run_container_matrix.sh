@@ -16,7 +16,7 @@ iters=150
 eager_iters=100
 records=48
 batch_size=162
-tokens_per_request=5
+tokens_per_request=4
 seq_len=3500
 cpu_set=""
 

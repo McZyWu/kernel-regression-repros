@@ -3,7 +3,7 @@
 
 The Qwen3-30B-A3B EAGLE3 target-verify graph contains 48 independent
 FusedInferAttentionScore records.  At the production graph bucket of 162
-requests, each target-verify forward contains five query tokens per request
+requests, each target-verify forward contains four query tokens per request
 and updates a 162-element ``actual_seq_lengths_kv`` list.  This reproducer
 captures the same number and shapes of IFA records, changes that list through
 ``NPUGraph.update``, and overlaps the update with ``NPUGraph.replay`` as the
@@ -74,8 +74,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tokens-per-request",
         type=int,
-        default=5,
-        help="target-verify query tokens per request (4 drafts + 1 bonus)",
+        default=4,
+        help="target-verify query tokens per request (production: 4)",
     )
     parser.add_argument("--warmup", type=int, default=30)
     parser.add_argument("--iters", type=int, default=200)
@@ -181,7 +181,7 @@ def main() -> int:
     num_blocks = args.batch_size * blocks_per_request
 
     query = torch.randn(
-        (num_tokens, 1, num_heads * head_dim), device=device, dtype=dtype
+        (num_tokens, num_heads, head_dim), device=device, dtype=dtype
     )
     key = torch.randn(
         (num_blocks, page_size, num_kv_heads * head_dim),
@@ -192,14 +192,23 @@ def main() -> int:
     block_table = torch.arange(num_blocks, device=device, dtype=torch.int32).view(
         args.batch_size, blocks_per_request
     )
+    actual_seq_lengths = list(
+        range(args.tokens_per_request, num_tokens + 1, args.tokens_per_request)
+    )
+    # AscendAttnMaskBuilder.generate_mask_flag(2048), as used by forward_mtp.
+    atten_mask = ~torch.ones(
+        (2048, 2048), device=device, dtype=torch.bool
+    ).tril_()
     common = {
         "block_size": page_size,
         "num_heads": num_heads,
         "num_key_value_heads": num_kv_heads,
-        "input_layout": "BSH",
+        "input_layout": "TND",
         "scale": head_dim**-0.5,
+        "atten_mask": atten_mask,
+        "actual_seq_lengths": actual_seq_lengths,
         "actual_seq_lengths_kv": [args.seq_len] * args.batch_size,
-        "sparse_mode": 0,
+        "sparse_mode": 3,
     }
 
     # The calls are serial, so sharing the workspace is safe.  Unique tensor

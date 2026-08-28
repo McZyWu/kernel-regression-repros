@@ -18,14 +18,17 @@ same full `bs=162` graph bucket and core shape:
 ```text
 records=48
 batch size=162
-query tokens per request=5 (4 drafts + 1 bonus)
-total query tokens=810
+query tokens per request=4
+total query tokens=648
 query heads=16
 KV heads=2
 head dimension=128
+query layout=TND
 KV sequence length=3500 -> 3501
 actual_seq_lengths_kv elements=162
+actual_seq_lengths=[4, 8, ..., 648]
 KV page size=128
+sparse mode=3 with the production 2048x2048 boolean MTP mask
 dtype=bfloat16
 ```
 
