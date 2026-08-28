@@ -40,6 +40,12 @@ selects the requested NPU because torch-npu device selection is thread-local;
 without that initialization a run targeting a nonzero device can silently
 open device 0 and hang during final synchronization.
 
+The update call also follows the target runner's production form exactly:
+`graph.update(cpu_update_input=[{"actual_seq_lengths_kv": seq_lens}])`.
+torch-npu expands that single CPU input across all 48 captured IFA dispatch
+records.  Supplying 48 dictionaries directly would update the same values but
+would bypass the singleton expansion host path being measured.
+
 The eager IFA path is measured as a control.  Before `--batch-size` was added,
 the diagnostic used five independent single-query entries rather than the
 production 162-request target-verify shape.  Those legacy measurements showed

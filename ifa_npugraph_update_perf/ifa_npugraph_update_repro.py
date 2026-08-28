@@ -308,9 +308,12 @@ def main() -> int:
         issue_ops()
     torch.npu.synchronize()
 
+    # Match the target graph runner exactly: submit one CPU update input and
+    # let torch-npu broadcast it to all captured IFA dispatch records.  Passing
+    # one dictionary per record produces the same values, but bypasses the
+    # singleton expansion path whose host cost is part of this regression.
     updates = [
         {"actual_seq_lengths_kv": [args.seq_len + 1] * args.batch_size}
-        for _ in range(args.records)
     ]
     # NPU device selection is thread-local.  Without an initializer, a worker
     # created while the main thread is on (for example) npu:14 silently opens
@@ -327,7 +330,7 @@ def main() -> int:
 
     def timed_update() -> float:
         started = time.perf_counter_ns()
-        graph.update(updates)
+        graph.update(cpu_update_input=updates)
         return (time.perf_counter_ns() - started) / 1_000
 
     profiler = _make_profiler(args.profile_dir) if args.profile_dir else None
