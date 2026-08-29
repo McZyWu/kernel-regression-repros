@@ -10,6 +10,7 @@ multi-hour profiling runs so a stack change can be evaluated quickly.
 | --- | --- | --- |
 | `csgmv_lora_shrink_perf` | `sglang.kernels.ops.gemm.chunked_sgmv_shrink._chunked_lora_shrink_kernel` | LoRA-A shrink became tens to hundreds of times slower on the 0813 stack |
 | `ifa_npugraph_update_perf` | `torch.npu.NPUGraph.update` for 48 `npu_fused_infer_attention_score.out` records | Diagnose the unpinned 0813 slow tail and distinguish it from CPU-placement noise |
+| `k3_ta_autotune_dp` | Kimi-K3 cumsum/KDA Triton autotune plus DP4 all-gather | Separate TA candidate benchmark stalls, per-node cache contention, and collective wait propagation |
 | `recompute_multi_rank_hang` | `sgl_kernel_npu.fla.wy_fast.recompute_w_u_fwd_npu` | A Qwen3-Next TP4/DP1 process stopped inside the operator after prior model execution |
 
 ## csgmv LoRA-A shrink performance regression
@@ -105,6 +106,21 @@ bash ifa_npugraph_update_perf/run_container_matrix.sh \
 See [`ifa_npugraph_update_perf/README.md`](ifa_npugraph_update_perf/README.md)
 for the exact shape, profiler command, interpretation, and reproduction
 boundary.
+
+## Kimi-K3 Triton autotune and DP-wait diagnostic
+
+This model-free test launches the production cumsum and KDA inter/intra
+Triton kernels with Kimi-K3 shapes.  A forced-autotune path compares TA
+versions independently from SGLang's NPU static-config bypass, while the
+production path verifies that bypass for correctness and startup skew.
+
+The four-node mode creates 16 cross-node DP4 groups from 64 ranks and records
+whether peers are waiting in `all_gather` while a lagging rank is still in
+Triton JIT, candidate benchmarking, or `torch_npu.synchronize`.  Per-node and
+per-rank cache layouts distinguish local 16-process cache contention from the
+benchmark path itself.  See
+[`k3_ta_autotune_dp/README.md`](k3_ta_autotune_dp/README.md) for the controlled
+cold/warm matrix and exact launch commands.
 
 ## `recompute_w_u_fwd_npu` multi-rank hang replay
 
