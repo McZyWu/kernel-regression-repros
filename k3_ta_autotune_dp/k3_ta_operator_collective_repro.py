@@ -672,7 +672,13 @@ def main() -> int:
             name: sha256_file(path) for name, path in source_files.items()
         },
         "git_head": git_value("rev-parse", "HEAD"),
-        "git_status": git_value("status", "--porcelain"),
+        "git_status": git_value(
+            "status",
+            "--porcelain",
+            "--",
+            "python/sglang/kernels/ops/attention/fla/cumsum.py",
+            "python/sglang/kernels/ops/attention/fla/kda.py",
+        ),
         "cache": CACHE_INFO,
         "selected_env": {
             name: os.getenv(name)

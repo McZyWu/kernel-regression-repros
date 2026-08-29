@@ -79,7 +79,10 @@ export TRITON_PRINT_AUTOTUNING="${TRITON_PRINT_AUTOTUNING:-1}"
     echo "source=${SGLANG_SOURCE}"
     echo "commit=$(git -C "${SGLANG_SOURCE}" rev-parse HEAD 2>/dev/null || true)"
     echo "git_status_begin"
-    git -C "${SGLANG_SOURCE}" status --porcelain 2>/dev/null || true
+    git -C "${SGLANG_SOURCE}" status --porcelain -- \
+        python/sglang/kernels/ops/attention/fla/cumsum.py \
+        python/sglang/kernels/ops/attention/fla/kda.py \
+        2>/dev/null || true
     echo "git_status_end"
     sha256sum \
         "${SGLANG_SOURCE}/python/sglang/kernels/ops/attention/fla/cumsum.py" \
