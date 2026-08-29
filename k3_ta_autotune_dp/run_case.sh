@@ -48,8 +48,12 @@ RUN_DIR="${RESULT_ROOT}/${CASE_NAME}/${PHASE}/node${NODE_RANK}"
 mkdir -p "${RUN_DIR}"
 cd "${SGLANG_SOURCE}"
 
+# CANN 9.0's ATB environment script reads ZSH_VERSION without a default.
+# Keep strict nounset for this runner, but not while sourcing vendor scripts.
+set +u
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 source /usr/local/Ascend/nnal/atb/set_env.sh
+set -u
 
 unset ASCEND_LAUNCH_BLOCKING
 unset ASCEND_CUSTOM_OPP_PATH
