@@ -154,3 +154,75 @@ python3 /home/wzy/kernel-regression-repros/k3_ta_autotune_dp/summarize_ab.py \
 主 A/B 不应设置 `ASCEND_LAUNCH_BLOCKING=1`，因为它会改变 benchmark 时序。
 只有发生 timeout 后，才单独用 blocking 重跑单卡用例，结合 180 秒一次的
 faulthandler stack 定位具体停在 cumsum、KDA inter、KDA intra 还是 collective。
+
+## 6. `alloc_extend` 64-rank 编译定位
+
+`alloc_extend` 是普通 `@triton.jit` kernel，不存在 autotune candidate。它与
+KDA/cumsum 的 autotune 是两条独立路径。服务进程的现场栈若停在
+`alloc_extend_kernel -> linalg_to_bin_enable_npu_compile_A2_A3`，应使用本节的
+独立用例，而不是用固定 KDA config 推断它是否恢复。
+
+用例在四节点各启动 16 个 rank，依次记录：
+
+```text
+before_compile -> after_compile -> after_launch -> after_sync
+               -> before_dp_all_gather -> after_dp_all_gather
+```
+
+`exact-dynamic` 原样调用同一 SGLang checkout 的生产 kernel；`static-bound` 只把
+Part 2 的运行时动态循环恢复成 PR #19898 之前的 constexpr 上界。K3 现场参数是
+`page_size=128`、单请求 `bs_upper=1`。`pre_lens/seq_lens` 的值不是编译 key，默认
+70 token 足以触发相同编译；另跑 4096/16384 token 用来覆盖动态循环的设备执行。
+
+每台机器分别运行，`NODE_RANK` 使用 0/1/2/3：
+
+```bash
+NODE_RANK=<0|1|2|3> \
+CASE_NAME=ta322-dynamic-p128-bs1-cold \
+PHASE=cold \
+VARIANT=exact-dynamic \
+SGLANG_SOURCE=/home/wzy/sglang-ta-ab \
+CACHE_ROOT=/tmp/alloc-extend-network/ta322-dynamic-p128-bs1-cold \
+RESULT_ROOT=/home/wzy/alloc-extend-network-results \
+MASTER_ADDR=192.168.25.209 \
+MASTER_PORT=30231 \
+bash /home/wzy/kernel-regression-repros/k3_ta_autotune_dp/run_alloc_extend_network.sh
+```
+
+冷跑不会删除 cache，而是在 `${CACHE_ROOT}/nodeN` 已存在时直接退出码 3，结果目录
+已存在也拒绝覆盖。这样日志中的 `node_cache_preexisting=false` 和生成后的
+`cache_manifest.tsv` 可以证明没有复用前一轮二进制。每个 TA 版本、variant、
+cache layout 都必须使用全新的 `CASE_NAME`、`CACHE_ROOT` 和 `MASTER_PORT`。
+
+建议矩阵：
+
+| CANN/torch-npu | TA | variant | cache layout | 输入 |
+|---|---|---|---|---|
+| 完全相同 | 3.2.1 | exact-dynamic | per-node | bs1/page128/70 |
+| 完全相同 | 3.2.2 | exact-dynamic | per-node | bs1/page128/70 |
+| 完全相同 | 3.2.2 | exact-dynamic | per-rank | bs1/page128/70 |
+| 完全相同 | 3.2.2 | static-bound | per-node | bs1/page128/70 |
+| 完全相同 | 3.2.2 | exact-dynamic | per-node | bs1/page128/16384 |
+
+判定：
+
+- 只随 TA 3.2.1/3.2.2 变化，且停在 `before_compile`：TA 编译回归；
+- 3.2.2 的 per-node 挂而 per-rank 通过：同节点 16 进程共享 Triton cache 的
+  lock/launcher build 竞争；
+- 3.2.2 只有 `exact-dynamic` 挂而 `static-bound` 通过：SGLang allocator 应在
+  NPU 避免运行时动态 loop，最小修改点为 `alloc_extend_kernel`；
+- `after_compile` 有而 `after_sync` 没有：不是编译，而是 kernel 执行/设备同步；
+- 两个单算子 variant 均通过：`alloc_extend` 的一次 py-spy 采样只是当时正在编译，
+  继续在框架首请求的 rank 调度顺序、cache 共享和 DP batch metadata 对齐处定位。
+
+把四个 `nodeN` 目录收集到同一个 case/phase 目录后，可直接汇总多轮 A/B：
+
+```bash
+python3 k3_ta_autotune_dp/summarize_alloc_extend_network.py \
+  /collected/ta321-dynamic/cold \
+  /collected/ta322-dynamic/cold \
+  /collected/ta322-static/cold
+```
+
+汇总器会拒绝比较 allocator SHA256 或输入 shape 不一致的结果，并列出每轮 64 个
+rank 的最后事件、未完成 rank、编译耗时 min/median/max 和数值正确性。
