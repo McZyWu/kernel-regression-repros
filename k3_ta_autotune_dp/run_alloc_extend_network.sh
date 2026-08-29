@@ -34,8 +34,10 @@ if [[ "${PHASE}" != "cold" && "${PHASE}" != "warm" ]]; then
     echo "PHASE must be cold or warm" >&2
     exit 2
 fi
-if [[ "${VARIANT}" != "exact-dynamic" && "${VARIANT}" != "static-bound" ]]; then
-    echo "VARIANT must be exact-dynamic or static-bound" >&2
+if [[ "${VARIANT}" != "exact-dynamic" && \
+      "${VARIANT}" != "npu-production" && \
+      "${VARIANT}" != "static-bound" ]]; then
+    echo "VARIANT must be exact-dynamic, npu-production, or static-bound" >&2
     exit 2
 fi
 if [[ ! -f "${REPRO_SCRIPT}" ]]; then

@@ -267,3 +267,34 @@ all-gather；四节点时仍使用 `[0,16,32,48]` 等真实 DP4 group。
 单机可以证明 TA 版本回归、dynamic/static 差异、compile/launch/sync 阶段以及
 节点内 cache 并发问题；不能证明跨节点 HCCL、真实 DP4 group 或完整 SGLang
 scheduler 的问题。只有单机全部通过而完整服务仍挂时，才需要扩大到四节点。
+
+### 真实 NPU allocator 的 64-rank 验证
+
+`exact-dynamic` 导入 SGLang 通用 allocator，并不等同于 NPU monkeypatch 的最终
+调用路径。要验证 K3 在 NPU 上实际使用的算子，使用 `npu-production`：
+
+```bash
+NODE_RANK=<0|1|2|3> \
+NNODES=4 \
+NPROC_PER_NODE=16 \
+MASTER_ADDR=192.168.25.209 \
+MASTER_PORT=30241 \
+CASE_NAME=ta322-npu-production-64r-cold \
+PHASE=cold \
+VARIANT=npu-production \
+SGLANG_SOURCE=/home/wzy/sglang-ta-ab \
+CACHE_ROOT=/tmp/alloc-extend-network/ta322-npu-production-64r-cold \
+RESULT_ROOT=/home/wzy/alloc-extend-network-results \
+CACHE_LAYOUT=per-node \
+BATCH_SIZE=1 \
+PAGE_SIZE=128 \
+PREFIX_TOKENS=0 \
+EXTEND_TOKENS=70 \
+bash /home/wzy/kernel-regression-repros/k3_ta_autotune_dp/run_alloc_extend_network.sh
+```
+
+这个变体直接导入
+`sgl_kernel_npu.mem_cache.allocator.alloc_extend_kernel`，并按 NPU allocator
+生产调用传入 `next_power_of_2(extend_num_tokens)` 作为 constexpr。结果中的
+`allocator_source`、`allocator_sha256` 和 `sgl-kernel-npu` 版本用于拒绝把通用
+SGLang kernel 的结果误当成 K3 NPU 生产路径。

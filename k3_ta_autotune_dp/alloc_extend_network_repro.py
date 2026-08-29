@@ -3,8 +3,9 @@
 
 The test deliberately separates Triton compilation, first launch, device
 synchronization, and the following DP all-gather.  It supports the exact SGLang
-dynamic-loop kernel and a control variant that restores the constexpr loop
-bound used before SGLang PR #19898.
+dynamic-loop kernel, the real ``sgl_kernel_npu`` production kernel, and a
+control variant that restores the constexpr loop bound used before SGLang
+PR #19898.
 
 Cache variables are configured before importing Torch, Triton, or SGLang.
 Use ``run_alloc_extend_network.sh`` for cold-cache refusal and environment
@@ -33,7 +34,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--case", required=True)
     parser.add_argument("--phase", choices=("cold", "warm"), required=True)
     parser.add_argument(
-        "--variant", choices=("exact-dynamic", "static-bound"), required=True
+        "--variant",
+        choices=("exact-dynamic", "npu-production", "static-bound"),
+        required=True,
     )
     parser.add_argument("--cache-root", required=True)
     parser.add_argument(
@@ -106,6 +109,7 @@ import triton  # noqa: E402
 import triton.language as tl  # noqa: E402
 
 import sglang.kernels.ops.memory.allocator as allocator_module  # noqa: E402
+import sgl_kernel_npu.mem_cache.allocator as npu_allocator_module  # noqa: E402
 
 
 def emit(event: str, **fields: Any) -> None:
@@ -137,7 +141,14 @@ def sha256_file(path: str | os.PathLike[str]) -> str:
 
 def distribution_versions() -> dict[str, str]:
     result: dict[str, str] = {}
-    for name in ("torch", "torch-npu", "triton", "triton-ascend", "sglang"):
+    for name in (
+        "torch",
+        "torch-npu",
+        "triton",
+        "triton-ascend",
+        "sglang",
+        "sgl-kernel-npu",
+    ):
         try:
             result[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:
@@ -355,11 +366,17 @@ def reference(
     return torch.tensor(output, dtype=torch.int64)
 
 
-def selected_kernel() -> tuple[Any, tuple[int, ...]]:
+def selected_kernel() -> tuple[Any, tuple[int, ...], Any]:
     if ARGS.variant == "exact-dynamic":
-        return allocator_module.alloc_extend_kernel, ()
+        return allocator_module.alloc_extend_kernel, (), allocator_module
     max_tokens = triton.next_power_of_2(ARGS.batch_size * ARGS.extend_tokens)
-    return alloc_extend_kernel_static_bound, (max_tokens,)
+    if ARGS.variant == "npu-production":
+        return (
+            npu_allocator_module.alloc_extend_kernel,
+            (max_tokens,),
+            npu_allocator_module,
+        )
+    return alloc_extend_kernel_static_bound, (max_tokens,), allocator_module
 
 
 def create_dp_group() -> tuple[Any | None, list[int]]:
@@ -409,7 +426,7 @@ def run() -> dict[str, Any]:
 
     prefix, sequence, last_location, free_pages, output = make_inputs(device)
     expected = reference(prefix, sequence, last_location, free_pages)
-    kernel, extra_constexpr = selected_kernel()
+    kernel, extra_constexpr, selected_allocator_module = selected_kernel()
     bs_upper = triton.next_power_of_2(ARGS.batch_size)
     kernel_args = (
         prefix,
@@ -430,8 +447,10 @@ def run() -> dict[str, Any]:
         "versions": distribution_versions(),
         "triton_artifacts": module_artifacts(),
         "triton_module": str(Path(triton.__file__).resolve()),
-        "allocator_source": str(Path(allocator_module.__file__).resolve()),
-        "allocator_sha256": sha256_file(allocator_module.__file__),
+        "allocator_source": str(
+            Path(selected_allocator_module.__file__).resolve()
+        ),
+        "allocator_sha256": sha256_file(selected_allocator_module.__file__),
         "shape": {
             "batch_size": ARGS.batch_size,
             "bs_upper": bs_upper,
