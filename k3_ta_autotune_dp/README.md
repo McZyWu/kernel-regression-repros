@@ -226,3 +226,44 @@ python3 k3_ta_autotune_dp/summarize_alloc_extend_network.py \
 
 汇总器会拒绝比较 allocator SHA256 或输入 shape 不一致的结果，并列出每轮 64 个
 rank 的最后事件、未完成 rank、编译耗时 min/median/max 和数值正确性。
+
+### 单机 16-rank 收缩用例
+
+定位 TA 编译、动态 loop lowering 和节点内共享 Triton cache 竞争时，不需要先跑
+四机。因为编译器进程和 `/tmp/TRITON_CACHE_DIR` 都是节点本地资源，单机同时启动
+16 个 rank 已能保留完整服务在每个节点上的主要并发条件：
+
+```bash
+NODE_RANK=0 \
+NNODES=1 \
+NPROC_PER_NODE=16 \
+MASTER_ADDR=127.0.0.1 \
+MASTER_PORT=30231 \
+CASE_NAME=ta322-dynamic-single-node-cold \
+PHASE=cold \
+VARIANT=exact-dynamic \
+SGLANG_SOURCE=/home/wzy/sglang-ta-ab \
+CACHE_ROOT=/tmp/alloc-extend-network/ta322-dynamic-single-node-cold \
+RESULT_ROOT=/home/wzy/alloc-extend-network-results \
+CACHE_LAYOUT=per-node \
+BATCH_SIZE=1 \
+PAGE_SIZE=128 \
+PREFIX_TOKENS=0 \
+EXTEND_TOKENS=70 \
+bash /home/wzy/kernel-regression-repros/k3_ta_autotune_dp/run_alloc_extend_network.sh
+```
+
+单节点没有真实的跨节点 DP4 group。为保留“一个 rank 编译落后、其他 rank 在
+collective 等待”的诊断模式，用例在 `NNODES=1` 时让全部 16 rank 进入默认 world
+all-gather；四节点时仍使用 `[0,16,32,48]` 等真实 DP4 group。
+
+单机矩阵先跑以下四轮，每轮使用从未存在过的 case/cache 目录：
+
+1. 同一 CANN/torch-npu + TA 3.2.1，`exact-dynamic/per-node`；
+2. 同一 CANN/torch-npu + TA 3.2.2，`exact-dynamic/per-node`；
+3. TA 3.2.2，`exact-dynamic/per-rank`；
+4. TA 3.2.2，`static-bound/per-node`。
+
+单机可以证明 TA 版本回归、dynamic/static 差异、compile/launch/sync 阶段以及
+节点内 cache 并发问题；不能证明跨节点 HCCL、真实 DP4 group 或完整 SGLang
+scheduler 的问题。只有单机全部通过而完整服务仍挂时，才需要扩大到四节点。

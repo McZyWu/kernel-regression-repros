@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""64-rank Kimi-K3 reproducer for the Triton ``alloc_extend`` JIT path.
+"""Multi-rank Kimi-K3 reproducer for the Triton ``alloc_extend`` JIT path.
 
 The test deliberately separates Triton compilation, first launch, device
 synchronization, and the following DP all-gather.  It supports the exact SGLang
@@ -370,12 +370,20 @@ def create_dp_group() -> tuple[Any | None, list[int]]:
             f"WORLD_SIZE={WORLD_SIZE} must be divisible by "
             f"LOCAL_WORLD_SIZE={LOCAL_WORLD_SIZE}"
         )
+    num_nodes = WORLD_SIZE // LOCAL_WORLD_SIZE
+    if num_nodes == 1:
+        # A real K3 DP group has one matching local slot on every node. With a
+        # single node that would degenerate to one rank and would not expose
+        # first-compile skew. Use the 16-rank default world group as the local
+        # diagnostic control: one slow compiler then makes its 15 peers wait.
+        return None, list(range(WORLD_SIZE))
+
     selected = None
     selected_ranks: list[int] = []
     for slot in range(LOCAL_WORLD_SIZE):
         ranks = [
             node * LOCAL_WORLD_SIZE + slot
-            for node in range(WORLD_SIZE // LOCAL_WORLD_SIZE)
+            for node in range(num_nodes)
         ]
         group = dist.new_group(ranks=ranks, backend="hccl")
         if slot == LOCAL_RANK:

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Launch the alloc_extend single-operator reproducer on one of four nodes.
+# Launch the alloc_extend single-operator reproducer on one or more nodes.
 # Cold runs refuse any pre-existing cache rather than deleting it.
 
 set -euo pipefail
 
-: "${NODE_RANK:?set NODE_RANK to 0, 1, 2, or 3}"
+: "${NODE_RANK:?set NODE_RANK to a value in [0, NNODES)}"
 : "${CASE_NAME:?set a unique CASE_NAME}"
 : "${PHASE:?set PHASE to cold or warm}"
 : "${VARIANT:?set VARIANT to exact-dynamic or static-bound}"
