@@ -74,6 +74,66 @@ bash /home/wzy/kernel-regression-repros/k3_ta_autotune_dp/run_case.sh
 autotune 内存 cache 为空，因此仍能验证“二进制已缓存、候选 benchmark 重跑”
 是否会挂。
 
+### 单机 16-rank 冷缓存编译变慢 A/B
+
+要复现 TA 3.2.2 相对 3.2.1 的 KDA 首次编译变慢，推荐在同一个 CANN 容器里
+创建两个 Python ABI 相同的 venv，只切换 TA 安装。然后直接运行：
+
+```bash
+# 两个 venv 必须使用相同 Python、torch 和 torch-npu。右侧安装待测的修复版
+# wheel，不要用 PyPI/镜像里另一份同名 3.2.2 代替。
+TA321_VENV=/path/to/ta321-venv
+TA322_VENV=/path/to/ta322-fixed-venv
+${TA321_VENV}/bin/python3 -m pip install --force-reinstall /path/to/ta-3.2.1.whl
+${TA322_VENV}/bin/python3 -m pip install --force-reinstall \
+  /path/to/triton_ascend-3.2.2-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl
+```
+
+本次已验证的修复版 wheel SHA256 为
+`bb02d9eb2181172f783aefdb2b4505fb7c52bf93c506d43290bac58b2b3f4e7e`；
+运行其他构建时应把实际 wheel 和 `compiler.py` 哈希一起保存在结果中。
+
+```bash
+SGLANG_SOURCE=/home/wzy/sglang-main-5f216fc-cann91-ta322 \
+TA321_VENV=/home/wzy/venvs/ta321-official-3e7b638e-py312-20260829a \
+TA322_VENV=/home/wzy/venvs/ta-fixed-bb02d9eb-py312-20260829a \
+RUNS=3 \
+RUN_ID=k3-ta-compile-$(date +%Y%m%d-%H%M%S) \
+RESULT_ROOT=/home/wzy/k3-ta-compile-ab-results \
+CACHE_ROOT=/tmp/k3-ta-compile-ab \
+bash k3_ta_autotune_dp/run_compile_slowdown_ab_16rank.sh
+```
+
+脚本每轮启动单机 16 rank，使用 `forced-autotune`、`OP=both`、`varlen` 和
+`CACHE_LAYOUT=per-node`；每个 TA/轮次生成全新的 cache root，冷跑目录已存在时
+直接拒绝运行。奇数轮先跑 3.2.1，偶数轮先跑 3.2.2，降低固定运行顺序带来的
+温度和系统负载偏差。不要设置 `ASCEND_LAUNCH_BLOCKING=1`，也不要复用另一版本
+或上一轮的 `/tmp` cache。脚本会拒绝 Python ABI、torch 或 torch-npu 不一致的
+A/B；CANN 一致性由“在同一个容器中运行两个 venv”保证。
+
+每轮结束会在以下目录生成机器可读的 A/B 汇总：
+
+```text
+${RESULT_ROOT}/ab-summaries/${RUN_ID}/roundN.json
+```
+
+重点看：
+
+- `right_vs_left_median_slowdown_percent.first_call_total_seconds`：cumsum 与 KDA
+  合计冷启动回退；实测三轮通常约 `+15%`；
+- `right_vs_left_median_slowdown_percent.kda_first_seconds`：KDA inter/intra
+  合计回退；实测约 `+23%`；
+- `autotune_log_seconds._chunk_kda_scaled_dot_kkt_fwd_kernel_intra_sub_inter`：
+  24 个 inter candidate 的总 autotune 时间；3.2.1 约 70 秒，3.2.2 修复版
+  约 90 秒，是主要差异；
+- `_chunk_kda_scaled_dot_kkt_fwd_kernel_intra_sub_intra` 和
+  `_chunk_local_cumsum_vector_kernel` 通常接近；
+- `dp_all_gather_seconds` 两边应接近，说明 collective 是等待者而不是回退源头；
+- `sources_aligned` 必须是 `true`，16/16 rank 必须完整且 `all_correct=true`。
+
+这个用例证明的是同节点 16 个 TA 编译进程竞争时的冷缓存编译性能回退，不证明
+kernel 热态执行变慢，也不等同于通用 `alloc_extend` 的 BiShengIR UB overflow。
+
 ## 2. 四节点整网模拟
 
 四台机器分别设置 `NODE_RANK=0/1/2/3`，其余参数完全相同，并发启动：
