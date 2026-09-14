@@ -10,6 +10,7 @@ multi-hour profiling runs so a stack change can be evaluated quickly.
 | --- | --- | --- |
 | `csgmv_lora_shrink_perf` | `sglang.kernels.ops.gemm.chunked_sgmv_shrink._chunked_lora_shrink_kernel` | LoRA-A shrink became tens to hundreds of times slower on the 0813 stack |
 | `ifa_npugraph_update_perf` | `torch.npu.NPUGraph.update` for 48 `npu_fused_infer_attention_score.out` records | Diagnose the unpinned 0813 slow tail and distinguish it from CPU-placement noise |
+| [`ifa_npugraph_update_perf/pooled_kv_offset`](ifa_npugraph_update_perf/pooled_kv_offset) | IFA tiling reuse with shared K/V storage | CANN 9.1 performs 48 tilings per update for different K/V view offsets; equivalent zero-offset aliases restore one |
 | `recompute_multi_rank_hang` | `sgl_kernel_npu.fla.wy_fast.recompute_w_u_fwd_npu` | A Qwen3-Next TP4/DP1 process stopped inside the operator after prior model execution |
 
 ## csgmv LoRA-A shrink performance regression
