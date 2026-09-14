@@ -1,0 +1,365 @@
+[
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/723-fia-fresh/profile/localhost.localdomain_472_20260910112033545_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 8875.02,
+        "mean_us": 46.2240625
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 957.4,
+        "mean_us": 4.986458333333333
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 2133.77,
+        "mean_us": 11.113385416666667
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 1,
+        "sum_us": 84.15,
+        "mean_us": 84.15
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 7988.82,
+        "mean_us": 41.6084375
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/723-fia-packed0-progress/profile/localhost.localdomain_2917_20260910112841967_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 6449.82,
+        "mean_us": 33.5928125
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 805.11,
+        "mean_us": 4.19328125
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 2155.68,
+        "mean_us": 11.227500000000001
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 4,
+        "sum_us": 186.36,
+        "mean_us": 46.59
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 5795.7,
+        "mean_us": 30.1859375
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/723-fia-packed1-progress/profile/localhost.localdomain_2311_20260910112804415_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 6569.35,
+        "mean_us": 34.21536458333333
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 967.56,
+        "mean_us": 5.039375
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 2394.89,
+        "mean_us": 12.473385416666666
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 4,
+        "sum_us": 198.2,
+        "mean_us": 49.55
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 5762.73,
+        "mean_us": 30.01421875
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/723-fia-pool/profile/localhost.localdomain_1102_20260910112109791_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 6313.08,
+        "mean_us": 32.880625
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 735.98,
+        "mean_us": 3.8332291666666665
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 1830.51,
+        "mean_us": 9.53390625
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 1,
+        "sum_us": 68.59,
+        "mean_us": 68.59
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 5643.44,
+        "mean_us": 29.392916666666668
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/723-fia-ragged/profile/localhost.localdomain_1705_20260910112303617_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 8129.34,
+        "mean_us": 42.3403125
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 851.64,
+        "mean_us": 4.435625
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 1966.03,
+        "mean_us": 10.239739583333334
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 1,
+        "sum_us": 81.95,
+        "mean_us": 81.95
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 7418.49,
+        "mean_us": 38.63796875
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/813-fresh/profile/localhost.localdomain_169_20260910111935471_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 8481.75,
+        "mean_us": 44.17578125
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 939.24,
+        "mean_us": 4.891875
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 2444.46,
+        "mean_us": 12.7315625
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 1,
+        "sum_us": 60.31,
+        "mean_us": 60.31
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 7645.18,
+        "mean_us": 39.818645833333335
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/813-packed0-progress/profile/localhost.localdomain_2015_20260910112722915_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 8310.65,
+        "mean_us": 43.28463541666667
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 902.92,
+        "mean_us": 4.702708333333334
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 2646.08,
+        "mean_us": 13.781666666666666
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 4,
+        "sum_us": 176.37,
+        "mean_us": 44.0925
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 7635.85,
+        "mean_us": 39.77005208333333
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/813-packed1-progress/profile/localhost.localdomain_1558_20260910112705694_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 8348.79,
+        "mean_us": 43.48328125
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 763.37,
+        "mean_us": 3.975885416666667
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 13901.23,
+        "mean_us": 72.40223958333333
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 192,
+        "sum_us": 3838.66,
+        "mean_us": 19.993020833333333
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 7573.52,
+        "mean_us": 39.44541666666667
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/813-packed2-progress/profile/localhost.localdomain_2469_20260910112849131_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 8226.87,
+        "mean_us": 42.84828125
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 958.8,
+        "mean_us": 4.99375
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 2558.53,
+        "mean_us": 13.325677083333334
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 4,
+        "sum_us": 168.28,
+        "mean_us": 42.07
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 7432.95,
+        "mean_us": 38.71328125
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/813-pool/profile/localhost.localdomain_647_20260910111952992_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 8533.55,
+        "mean_us": 44.44557291666667
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 950.94,
+        "mean_us": 4.9528125
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 2337.58,
+        "mean_us": 12.174895833333332
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 1,
+        "sum_us": 63.16,
+        "mean_us": 63.16
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 7782.89,
+        "mean_us": 40.535885416666666
+      }
+    }
+  },
+  {
+    "trace": "/home/wzy/qwen3_cann91_diagnosis_20260910/813-ragged/profile/localhost.localdomain_1101_20260910112224120_ascend_pt/ASCEND_PROFILER_OUTPUT/trace_view.json",
+    "steps": 0,
+    "step_mean_us": null,
+    "step_p50_us": null,
+    "ifa": {
+      "Dequeue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 8406.03,
+        "mean_us": 43.78140625
+      },
+      "Enqueue@aclnnFusedInferAttentionScoreV3": {
+        "count": 192,
+        "sum_us": 925.98,
+        "mean_us": 4.8228125
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreGetWorkspaceSize": {
+        "count": 192,
+        "sum_us": 2350.09,
+        "mean_us": 12.240052083333333
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScoreTiling": {
+        "count": 1,
+        "sum_us": 92.69,
+        "mean_us": 92.69
+      },
+      "AscendCL@aclnnInnerFusedInferAttentionScore": {
+        "count": 192,
+        "sum_us": 7538.38,
+        "mean_us": 39.262395833333336
+      }
+    }
+  }
+]

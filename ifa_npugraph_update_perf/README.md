@@ -1,5 +1,11 @@
 # IFA NPU Graph update performance diagnostic
 
+The subsequent 2026-09-10 investigation isolated a pooled K/V view-offset
+trigger that the independent-storage diagnostic below does not reproduce.
+See [`pooled_kv_offset/`](pooled_kv_offset/) for the validated probe, launch
+matrices, and saved 1-versus-48 tiling counts. The original diagnostic and
+its scheduling measurements remain below.
+
 This microbenchmark investigates the NPU Graph update path implicated by the
 Qwen3-30B-A3B W8A8 EAGLE3 performance regression observed after upgrading the
 native Ascend stack from CANN 9.0 to CANN 9.1.  It is designed to distinguish

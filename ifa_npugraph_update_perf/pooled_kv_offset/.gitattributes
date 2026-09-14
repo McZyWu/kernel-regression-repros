@@ -1,0 +1,7 @@
+# Keep the validated experiment snapshot byte-for-byte across checkouts.
+# The original Python probe uses CRLF; preserve it as a valid line ending.
+ifa_worker_probe.py -text whitespace=cr-at-eol
+run_packed_probe.sh -text
+run_rebase_probe.sh -text
+summarize_traces.py -text
+trace_summary.json -text
